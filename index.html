@@ -688,6 +688,7 @@ function linkStatusBadge(item){
   if(!st) return '';
   const at = escapeAttr(fmtCheckedAt(item.linkCheckedAt));
   if(st==='checking') return `<span class="link-status checking">⏳ verificando...</span>`;
+  if(st==='unknown') return `<span class="link-status" title="Verificado em ${at}">❓ não foi possível confirmar</span>`;
   if(st==='private') return `<span class="link-status broken" title="Verificado em ${at}">🔒 vídeo privado ou removido</span>`;
   if(st==='embed_disabled') return `<span class="link-status broken" title="Verificado em ${at}">🚫 incorporação desativada pelo dono</span>`;
   if(st==='invalid') return `<span class="link-status broken" title="Verificado em ${at}">⚠ link de vídeo inválido</span>`;
@@ -726,23 +727,39 @@ let ytApiPromise = null;
 function loadYouTubeIframeAPI(){
   if(ytApiPromise) return ytApiPromise;
   ytApiPromise = new Promise(resolve=>{
-    if(window.YT && window.YT.Player){ resolve(); return; }
+    let done = false;
+    const finish = ()=>{ if(!done){ done = true; resolve(); } };
+    if(window.YT && window.YT.Player){ finish(); return; }
     const previous = window.onYouTubeIframeAPIReady;
     window.onYouTubeIframeAPIReady = ()=>{
       if(typeof previous === 'function') previous();
-      resolve();
+      finish();
     };
     if(!document.getElementById('yt-iframe-api-script')){
       const tag = document.createElement('script');
       tag.id = 'yt-iframe-api-script';
+      tag.onerror = finish; // se o script nem carregar, segue em frente
       tag.src = 'https://www.youtube.com/iframe_api';
       document.head.appendChild(tag);
     }
+    // Se o script for bloqueado por um bloqueador de anúncios, ou a rede
+    // estiver lenta, e o callback do YouTube nunca chamar de volta, essa
+    // promise ficaria esperando pra sempre — travando a checagem de TODOS
+    // os vídeos do YouTube sem nunca mostrar resultado nenhum. Esse limite
+    // garante que, depois de um tempo, seguimos em frente de qualquer jeito.
+    setTimeout(finish, 8000);
   });
   return ytApiPromise;
 }
 function checkYouTubeVideo(videoId, timeoutMs = 9000){
   return loadYouTubeIframeAPI().then(()=> new Promise(resolve=>{
+    if(!(window.YT && window.YT.Player)){
+      // a API do YouTube não carregou (provável bloqueio de rede/extensão) —
+      // não dá pra confirmar nem descartar o problema, então marca como
+      // "não verificado" em vez de arriscar dizer que está tudo bem.
+      resolve('unknown');
+      return;
+    }
     const holder = document.createElement('div');
     holder.style.cssText = 'position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none; left:-9999px; top:-9999px;';
     document.body.appendChild(holder);

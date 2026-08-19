@@ -608,12 +608,22 @@ function fmtCheckedAt(ts){
   const d = new Date(ts);
   return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 }
+// status "problemáticos" — qualquer um desses conta como quebrado pra
+// fins de contagem/filtro, mesmo tendo motivos diferentes.
+function isProblemStatus(status){
+  return status==='broken' || status==='private' || status==='embed_disabled' || status==='invalid';
+}
+
 function linkStatusBadge(item){
   const st = item.linkStatus;
   if(!st) return '';
+  const at = escapeAttr(fmtCheckedAt(item.linkCheckedAt));
   if(st==='checking') return `<span class="link-status checking">⏳ verificando...</span>`;
-  if(st==='broken') return `<span class="link-status broken" title="Falhou em ${escapeAttr(fmtCheckedAt(item.linkCheckedAt))}">⚠ possivelmente quebrado</span>`;
-  return `<span class="link-status ok" title="Verificado em ${escapeAttr(fmtCheckedAt(item.linkCheckedAt))}">✓ verificado ${escapeAttr(fmtCheckedAt(item.linkCheckedAt))}</span>`;
+  if(st==='private') return `<span class="link-status broken" title="Verificado em ${at}">🔒 vídeo privado ou removido</span>`;
+  if(st==='embed_disabled') return `<span class="link-status broken" title="Verificado em ${at}">🚫 incorporação desativada pelo dono</span>`;
+  if(st==='invalid') return `<span class="link-status broken" title="Verificado em ${at}">⚠ link de vídeo inválido</span>`;
+  if(st==='broken') return `<span class="link-status broken" title="Falhou em ${at}">⚠ possivelmente quebrado</span>`;
+  return `<span class="link-status ok" title="Verificado em ${at}">✓ verificado ${at}</span>`;
 }
 
 // Faz uma requisição HEAD "no-cors" só para saber se o servidor respondeu.
@@ -624,7 +634,7 @@ function linkStatusBadge(item){
 // pra distinguir 200 de 404/403 por essa via — isso é uma limitação de
 // segurança do navegador (CORS), não um bug. O que essa checagem detecta
 // bem é: domínio fora do ar, DNS que não resolve, servidor recusando
-// conexão, timeout — o caso mais comum de "link quebrado".
+// conexão, timeout. Usada só para links de vídeo direto (não-YouTube).
 async function pingLink(url, timeoutMs = 9000){
   const controller = new AbortController();
   const timer = setTimeout(()=>controller.abort(), timeoutMs);
@@ -636,6 +646,72 @@ async function pingLink(url, timeoutMs = 9000){
   }finally{
     clearTimeout(timer);
   }
+}
+
+// Links do YouTube não dão pra checar por "ping": o YouTube sempre responde
+// 200 OK, seja o vídeo público ou privado — quem decide se toca é o player,
+// não o servidor. Então carregamos o player oficial do YouTube (a mesma
+// API que ele usa por baixo dos panos) escondido na página, e perguntamos
+// a ele diretamente. O evento onError conta o motivo exato quando falha.
+let ytApiPromise = null;
+function loadYouTubeIframeAPI(){
+  if(ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise(resolve=>{
+    if(window.YT && window.YT.Player){ resolve(); return; }
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = ()=>{
+      if(typeof previous === 'function') previous();
+      resolve();
+    };
+    if(!document.getElementById('yt-iframe-api-script')){
+      const tag = document.createElement('script');
+      tag.id = 'yt-iframe-api-script';
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    }
+  });
+  return ytApiPromise;
+}
+function checkYouTubeVideo(videoId, timeoutMs = 9000){
+  return loadYouTubeIframeAPI().then(()=> new Promise(resolve=>{
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none; left:-9999px; top:-9999px;';
+    document.body.appendChild(holder);
+    let settled = false;
+    const finish = (status)=>{
+      if(settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try{ player && player.destroy && player.destroy(); }catch(e){}
+      holder.remove();
+      resolve(status);
+    };
+    // se não responder a tempo (rede lenta), assume ok — evita falso
+    // positivo por demora em vez de erro de verdade.
+    const timer = setTimeout(()=> finish('ok'), timeoutMs);
+    let player;
+    try{
+      player = new YT.Player(holder, {
+        videoId,
+        events:{
+          onReady: ()=> finish('ok'),
+          onError: (e)=>{
+            const code = e.data;
+            if(code === 100) finish('private');
+            else if(code === 101 || code === 150) finish('embed_disabled');
+            else if(code === 2) finish('invalid');
+            else finish('broken');
+          }
+        }
+      });
+    }catch(e){
+      finish('broken');
+    }
+  }));
+}
+async function checkOneLink(item){
+  const yid = getYouTubeId(item.link);
+  return yid ? checkYouTubeVideo(yid) : pingLink(item.link);
 }
 
 function scheduleBackgroundCheck(){
@@ -656,7 +732,7 @@ async function checkAllLinks(auto){
   const originalLabel = btn.textContent;
   if(!auto) statusEl.textContent = '';
 
-  const CONCURRENCY = 4;
+  const CONCURRENCY = 3;
   let done = 0;
   let idx = 0;
 
@@ -665,7 +741,7 @@ async function checkAllLinks(auto){
       const item = vivos[idx++];
       item.linkStatus = 'checking';
       render();
-      const result = await pingLink(item.link);
+      const result = await checkOneLink(item);
       item.linkStatus = result;
       item.linkCheckedAt = Date.now();
       done++;
@@ -681,10 +757,10 @@ async function checkAllLinks(auto){
   await persist();
   render();
 
-  const quebrados = vivos.filter(m=>m.linkStatus==='broken').length;
+  const quebrados = vivos.filter(m=>isProblemStatus(m.linkStatus)).length;
   statusEl.textContent = quebrados
-    ? `⚠ ${quebrados} link(s) possivelmente quebrado(s) · verificado ${fmtCheckedAt(Date.now())}`
-    : `✓ todos os links responderam · verificado ${fmtCheckedAt(Date.now())}`;
+    ? `⚠ ${quebrados} vídeo(s) com problema · verificado ${fmtCheckedAt(Date.now())}`
+    : `✓ todos os vídeos responderam · verificado ${fmtCheckedAt(Date.now())}`;
 }
 
 // ---------- vídeo: identificar YouTube vs. arquivo direto ----------
@@ -762,12 +838,12 @@ function render(){
   const q = document.getElementById('searchInput').value;
   const vivos = sinais.filter(m=>!m.deleted);
 
-  // pílula de filtro "somente quebrados", só aparece quando existe pelo menos um
+  // pílula de filtro "somente com problema", só aparece quando existe ao menos um
   const brokenBtn = document.getElementById('btnBrokenFilter');
-  const brokenCount = vivos.filter(m=>m.linkStatus==='broken').length;
+  const brokenCount = vivos.filter(m=>isProblemStatus(m.linkStatus)).length;
   if(brokenCount){
     brokenBtn.style.display = 'inline-block';
-    brokenBtn.textContent = onlyBroken ? '✕ mostrar todos' : `⚠ mostrar ${brokenCount} com link quebrado`;
+    brokenBtn.textContent = onlyBroken ? '✕ mostrar todos' : `⚠ mostrar ${brokenCount} com problema`;
     brokenBtn.classList.toggle('active', onlyBroken);
   } else {
     brokenBtn.style.display = 'none';
@@ -776,7 +852,7 @@ function render(){
 
   let filtered = vivos.filter(m =>
     matchesSearch(m,q) &&
-    (!onlyBroken || m.linkStatus==='broken')
+    (!onlyBroken || isProblemStatus(m.linkStatus))
   );
 
   document.getElementById('countNum').textContent = vivos.length;

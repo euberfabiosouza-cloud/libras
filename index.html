@@ -656,7 +656,6 @@ async function saveForm(){
   await persist();
   closeForm();
   render();
-  checkAllLinks(true); // reverifica em segundo plano após adicionar/editar
 }
 async function deleteItem(id){
   if(!confirm('Remover este item do glossário?')) return;
@@ -689,7 +688,7 @@ function linkStatusBadge(item){
   const at = escapeAttr(fmtCheckedAt(item.linkCheckedAt));
   if(st==='checking') return `<span class="link-status checking">⏳ verificando...</span>`;
   if(st==='unknown') return `<span class="link-status" title="Verificado em ${at}">❓ não foi possível confirmar</span>`;
-  if(st==='private') return `<span class="link-status broken" title="Verificado em ${at}">🔒 vídeo privado ou removido</span>`;
+  if(st==='private') return `<span class="link-status broken" title="Verificado em ${at} · vídeo privado, removido ou inexistente">🚫 Indisponível</span>`;
   if(st==='embed_disabled') return `<span class="link-status broken" title="Verificado em ${at}">🚫 incorporação desativada pelo dono</span>`;
   if(st==='invalid') return `<span class="link-status broken" title="Verificado em ${at}">⚠ link de vídeo inválido</span>`;
   if(st==='broken') return `<span class="link-status broken" title="Falhou em ${at}">⚠ possivelmente quebrado</span>`;
@@ -800,14 +799,7 @@ async function checkOneLink(item){
   return yid ? checkYouTubeVideo(yid) : pingLink(item.link);
 }
 
-function scheduleBackgroundCheck(){
-  // roda a verificação pouco depois de a tela desenhar, para não atrasar
-  // a primeira renderização — é a checagem "em segundo plano" de toda
-  // vez que o site é aberto.
-  setTimeout(()=> checkAllLinks(true), 700);
-}
-
-async function checkAllLinks(auto){
+async function checkAllLinks(){
   if(checking) return;
   const btn = document.getElementById('btnCheckLinks');
   const statusEl = document.getElementById('checkStatusMsg');
@@ -816,7 +808,7 @@ async function checkAllLinks(auto){
   checking = true;
   btn.classList.add('checking');
   const originalLabel = btn.textContent;
-  if(!auto) statusEl.textContent = '';
+  statusEl.textContent = '';
 
   const CONCURRENCY = 3;
   let done = 0;
@@ -1023,7 +1015,7 @@ function escapeHtml(s){
 function escapeAttr(s){ return escapeHtml(s); }
 
 // ---------- eventos ----------
-document.getElementById('btnCheckLinks').onclick = ()=> checkAllLinks(false);
+document.getElementById('btnCheckLinks').onclick = ()=> checkAllLinks();
 document.getElementById('btnBrokenFilter').onclick = ()=>{ onlyBroken = !onlyBroken; render(); };
 document.getElementById('btnOpenForm').onclick = ()=>{
   document.getElementById('syncCard').classList.remove('open');
@@ -1142,7 +1134,6 @@ document.getElementById('fileImport').onchange = (e)=>{
 
 loadFromLocalCache();
 initSyncFromStorage();
-scheduleBackgroundCheck();
 </script>
 </body>
 </html>

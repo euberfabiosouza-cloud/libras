@@ -146,6 +146,13 @@
   }
   .form-card.open{display:block;}
   .form-title{font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:18px; margin:0 0 14px;}
+  .tipo-toggle{display:flex; gap:8px; margin-bottom:16px;}
+  .tipo-toggle button{
+    flex:1; font-family:'Space Mono',monospace; font-size:11.5px; letter-spacing:.02em;
+    padding:9px 6px; border-radius:8px; border:1.5px solid var(--line);
+    background:var(--bg); color:var(--ink-soft); cursor:pointer; text-align:center;
+  }
+  .tipo-toggle button.active{border-color:var(--stage); background:var(--stage); color:#fff;}
   .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
   .form-grid .full{grid-column:1/-1;}
   label{
@@ -221,6 +228,22 @@
     font-family:'Bricolage Grotesque', sans-serif; font-weight:700; font-size:17px;
     margin:0 0 8px; line-height:1.3; color:var(--ink);
   }
+
+  /* ---------- card de termo sem sinal específico ---------- */
+  .card-termo{border-left:4px solid var(--gold);}
+  .card-termo .card-body{padding-top:16px;}
+  .termo-badge{
+    display:inline-block; align-self:flex-start;
+    font-family:'Space Mono',monospace; font-size:9.5px; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--gold-dark); background:var(--gold-soft);
+    padding:3px 9px; border-radius:20px; margin-bottom:10px;
+  }
+  .equivalencia{font-size:13.5px; color:var(--ink); line-height:1.5; margin:0 0 14px;}
+  .equivalencia-label{
+    display:block; font-family:'Space Mono',monospace; font-size:10px; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--ink-soft); margin-bottom:3px;
+  }
+  .card-bottom-termo{justify-content:flex-end;}
 
   .link-status{
     display:inline-flex; align-items:center; gap:4px;
@@ -307,13 +330,13 @@
     <p class="eyebrow">referência pessoal em vídeo</p>
     <div class="hero-top">
       <h1>🤟 Sinalário</h1>
-      <div class="count"><b id="countNum">0</b><br>sinais catalogados</div>
+      <div class="count"><b id="countNum">0</b><br>itens catalogados</div>
     </div>
     <div class="toolbar">
       <div class="search-box">
-        <input id="searchInput" type="text" placeholder="Buscar por nome do sinal...">
+        <input id="searchInput" type="text" placeholder="Buscar por nome ou termo...">
       </div>
-      <button class="btn-add" id="btnOpenForm">+ Adicionar sinal</button>
+      <button class="btn-add" id="btnOpenForm">+ Adicionar</button>
     </div>
   </div>
 
@@ -357,14 +380,22 @@
 
   <div class="form-card" id="formCard">
     <p class="form-title" id="formTitle">Novo sinal</p>
+    <div class="tipo-toggle" id="tipoToggle">
+      <button type="button" class="active" data-tipo="video">🎥 Sinal em vídeo</button>
+      <button type="button" data-tipo="termo">📝 Sem sinal específico</button>
+    </div>
     <div class="form-grid">
       <div class="full">
-        <label>Nome do sinal</label>
+        <label id="lblNome">Nome do sinal</label>
         <input type="text" id="fNome" placeholder="Ex: Obrigado, Desculpa, Água...">
       </div>
-      <div class="full">
+      <div class="full" id="linkField">
         <label>Link do vídeo</label>
         <input type="text" id="fLink" placeholder="https://... (mp4 direto ou link do YouTube)">
+      </div>
+      <div class="full" id="equivalenciaField" style="display:none;">
+        <label>Equivalência Descritiva</label>
+        <input type="text" id="fEquivalencia" placeholder="Ex: Caminho">
       </div>
     </div>
     <div class="form-actions">
@@ -375,8 +406,8 @@
 
   <div class="grid" id="grid"></div>
   <div class="empty" id="emptyState" style="display:none;">
-    <b>Nenhum sinal ainda</b>
-    Cadastre o primeiro com o botão "+ Adicionar sinal" acima.
+    <b>Nenhum item ainda</b>
+    Cadastre o primeiro com o botão "+ Adicionar" acima.
   </div>
 
   <p class="footnote">Os vídeos não são enviados nem armazenados aqui — só os links. Os dados ficam salvos neste navegador e, se você conectar a sincronização, também num Gist privado seu no GitHub. Exporte um backup de vez em quando como segurança extra.</p>
@@ -558,12 +589,30 @@ async function initSyncFromStorage(){
 }
 
 // ---------- formulário ----------
+let formTipo = 'video';
+
+function setFormTipo(tipo){
+  formTipo = tipo;
+  document.querySelectorAll('#tipoToggle button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tipo===tipo);
+  });
+  const isVideo = tipo === 'video';
+  document.getElementById('lblNome').textContent = isVideo ? 'Nome do sinal' : 'Termo';
+  document.getElementById('fNome').placeholder = isVideo ? 'Ex: Obrigado, Desculpa, Água...' : 'Ex: Trajetória';
+  document.getElementById('linkField').style.display = isVideo ? '' : 'none';
+  document.getElementById('equivalenciaField').style.display = isVideo ? 'none' : '';
+  document.getElementById('formTitle').textContent = editingId
+    ? (isVideo ? 'Editar sinal' : 'Editar termo')
+    : (isVideo ? 'Novo sinal' : 'Novo termo sem sinal específico');
+}
+
 function openForm(item){
   document.getElementById('formCard').classList.add('open');
-  document.getElementById('formTitle').textContent = item ? 'Editar sinal' : 'Novo sinal';
   editingId = item ? item.id : null;
+  setFormTipo(item ? (item.tipo || 'video') : 'video');
   document.getElementById('fNome').value = item ? item.nome : '';
-  document.getElementById('fLink').value = item ? item.link : '';
+  document.getElementById('fLink').value = item ? (item.link || '') : '';
+  document.getElementById('fEquivalencia').value = item ? (item.equivalencia || '') : '';
   document.getElementById('fNome').focus();
 }
 function closeForm(){
@@ -572,15 +621,35 @@ function closeForm(){
 }
 async function saveForm(){
   const nome = document.getElementById('fNome').value.trim();
-  const link = document.getElementById('fLink').value.trim();
-  if(!nome || !link){
-    alert('Nome do sinal e link do vídeo são obrigatórios.');
-    return;
+  let data;
+  if(formTipo === 'video'){
+    const link = document.getElementById('fLink').value.trim();
+    if(!nome || !link){
+      alert('Nome do sinal e link do vídeo são obrigatórios.');
+      return;
+    }
+    data = { tipo:'video', nome, link };
+  } else {
+    const equivalencia = document.getElementById('fEquivalencia').value.trim();
+    if(!nome || !equivalencia){
+      alert('Termo e Equivalência Descritiva são obrigatórios.');
+      return;
+    }
+    data = { tipo:'termo', nome, equivalencia };
   }
-  const data = { nome, link };
+
   if(editingId){
     const idx = sinais.findIndex(m=>m.id===editingId);
-    if(idx>-1) sinais[idx] = {...sinais[idx], ...data, linkStatus:null, linkCheckedAt:null, updatedAt: Date.now()};
+    if(idx>-1){
+      const prev = sinais[idx];
+      // reconstrói o item do zero com os campos do tipo escolhido, pra não
+      // deixar sobras (ex: um "link" antigo) se o tipo for trocado na edição.
+      sinais[idx] = {
+        id: prev.id, addedAt: prev.addedAt, updatedAt: Date.now(),
+        linkStatus: null, linkCheckedAt: null,
+        ...data
+      };
+    }
   } else {
     sinais.unshift({id: uid(), addedAt: Date.now(), updatedAt: Date.now(), ...data});
   }
@@ -590,7 +659,7 @@ async function saveForm(){
   checkAllLinks(true); // reverifica em segundo plano após adicionar/editar
 }
 async function deleteItem(id){
-  if(!confirm('Remover este sinal do glossário?')) return;
+  if(!confirm('Remover este item do glossário?')) return;
   const idx = sinais.findIndex(m=>m.id===id);
   if(idx>-1) sinais[idx] = {...sinais[idx], deleted:true, updatedAt: Date.now()};
   await persist();
@@ -599,7 +668,7 @@ async function deleteItem(id){
 
 function matchesSearch(item, q){
   if(!q) return true;
-  const hay = (item.nome||'').toLowerCase();
+  const hay = [(item.nome||''), (item.equivalencia||'')].join(' ').toLowerCase();
   return q.toLowerCase().split(' ').every(word => hay.includes(word));
 }
 
@@ -861,37 +930,56 @@ function render(){
   grid.innerHTML = '';
   document.getElementById('emptyState').style.display = filtered.length ? 'none' : 'block';
   if(!vivos.length){
-    document.getElementById('emptyState').querySelector('b').textContent = 'Nenhum sinal ainda';
-    document.getElementById('emptyState').lastChild.textContent = 'Cadastre o primeiro com o botão "+ Adicionar sinal" acima.';
+    document.getElementById('emptyState').querySelector('b').textContent = 'Nenhum item ainda';
+    document.getElementById('emptyState').lastChild.textContent = 'Cadastre o primeiro com o botão "+ Adicionar" acima.';
   } else if(!filtered.length){
     document.getElementById('emptyState').querySelector('b').textContent = 'Nada encontrado';
     document.getElementById('emptyState').lastChild.textContent = 'Tente outro termo de busca ou limpe o filtro de quebrados.';
   }
 
   filtered.forEach(item=>{
-    const badge = sourceBadge(item.link);
+    const tipo = item.tipo || 'video';
     const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="thumb viewfinder" data-play="${item.id}">
-        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
-        <span class="src-badge">${badge.icon} ${badge.label}</span>
-        ${badge.yid ? `<img class="thumb-img" src="https://img.youtube.com/vi/${badge.yid}/mqdefault.jpg" alt="" loading="lazy" onerror="this.remove()">` : ''}
-        <span class="play-btn">▶</span>
-      </div>
-      <div class="card-body">
-        <h3>${escapeHtml(item.nome)}</h3>
-        ${linkStatusBadge(item)}
-        <div class="card-bottom">
-          <button class="btn-watch" data-play="${item.id}">▶ Assistir</button>
-          <div class="card-actions">
-            <a class="link-original" href="${escapeAttr(item.link)}" target="_blank" rel="noopener" title="Abrir link original">↗</a>
-            <button class="icon-btn" data-edit="${item.id}">editar</button>
-            <button class="icon-btn" data-del="${item.id}">remover</button>
+
+    if(tipo === 'termo'){
+      card.className = 'card card-termo';
+      card.innerHTML = `
+        <div class="card-body">
+          <span class="termo-badge">📝 sem sinal específico</span>
+          <h3>${escapeHtml(item.nome)}</h3>
+          <p class="equivalencia"><span class="equivalencia-label">Equivalência descritiva</span>${escapeHtml(item.equivalencia)}</p>
+          <div class="card-bottom card-bottom-termo">
+            <div class="card-actions">
+              <button class="icon-btn" data-edit="${item.id}">editar</button>
+              <button class="icon-btn" data-del="${item.id}">remover</button>
+            </div>
           </div>
         </div>
-      </div>
-    `;
+      `;
+    } else {
+      const badge = sourceBadge(item.link);
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="thumb viewfinder" data-play="${item.id}">
+          <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+          <span class="src-badge">${badge.icon} ${badge.label}</span>
+          ${badge.yid ? `<img class="thumb-img" src="https://img.youtube.com/vi/${badge.yid}/mqdefault.jpg" alt="" loading="lazy" onerror="this.remove()">` : ''}
+          <span class="play-btn">▶</span>
+        </div>
+        <div class="card-body">
+          <h3>${escapeHtml(item.nome)}</h3>
+          ${linkStatusBadge(item)}
+          <div class="card-bottom">
+            <button class="btn-watch" data-play="${item.id}">▶ Assistir</button>
+            <div class="card-actions">
+              <a class="link-original" href="${escapeAttr(item.link)}" target="_blank" rel="noopener" title="Abrir link original">↗</a>
+              <button class="icon-btn" data-edit="${item.id}">editar</button>
+              <button class="icon-btn" data-del="${item.id}">remover</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
     grid.appendChild(card);
   });
 
@@ -926,6 +1014,9 @@ document.getElementById('btnOpenForm').onclick = ()=>{
 };
 document.getElementById('btnCancel').onclick = closeForm;
 document.getElementById('btnSave').onclick = saveForm;
+document.querySelectorAll('#tipoToggle button').forEach(b=>{
+  b.onclick = ()=> setFormTipo(b.dataset.tipo);
+});
 document.getElementById('searchInput').oninput = render;
 document.getElementById('btnCloseModal').onclick = closeVideoModal;
 document.getElementById('videoModal').addEventListener('click', (e)=>{

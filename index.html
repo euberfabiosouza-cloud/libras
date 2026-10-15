@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acervo Libras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Literata:opsz,wght@7..72,500;7..72,700&display=swap" rel="stylesheet">
+<style>
+  /* =========================================================
+     CONFIGURAÇÃO: troque pelo ID da sua planilha e nome da aba
+     O ID fica na URL: docs.google.com/spreadsheets/d/<ID>/edit
+     ========================================================= */
+  :root {
+    --tinta: #1B2430;
+    --fundo: #F4F6F9;
+    --papel: #FFFFFF;
+    --linha: #DCE2EA;
+    --suave: #5B6675;
+    --destaque: #0E6E6D;
+    --destaque-claro: #E3F1F0;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --tinta: #E6EBF1;
+      --fundo: #12171E;
+      --papel: #1A212B;
+      --linha: #2C3643;
+      --suave: #9AA6B4;
+      --destaque: #5CC2BF;
+      --destaque-claro: #173332;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--fundo);
+    color: var(--tinta);
+    font: 17px/1.55 "Atkinson Hyperlegible", system-ui, sans-serif;
+  }
+  header {
+    padding: 2.5rem 1.5rem 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-family: "Literata", Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    line-height: 1.05;
+    margin: 0 0 .4rem;
+    letter-spacing: -.01em;
+  }
+  header p { margin: 0; color: var(--suave); }
+
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem 3rem;
+    display: grid;
+    grid-template-columns: minmax(260px, 340px) 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  /* Lista de termos */
+  .lista {
+    background: var(--papel);
+    border: 1px solid var(--linha);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .busca {
+    padding: .9rem;
+    border-bottom: 1px solid var(--linha);
+    position: sticky; top: 0;
+    background: var(--papel);
+  }
+  .busca input {
+    width: 100%;
+    font: inherit;
+    padding: .6rem .8rem;
+    border: 1px solid var(--linha);
+    border-radius: 6px;
+    background: var(--fundo);
+    color: var(--tinta);
+  }
+  .busca input:focus { outline: 2px solid var(--destaque); outline-offset: 1px; }
+  #termos { max-height: 70vh; overflow-y: auto; }
+  .letra {
+    font-family: "Literata", Georgia, serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--destaque);
+    padding: .8rem 1rem .2rem;
+  }
+  .termo {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: .5rem 1rem;
+    cursor: pointer;
+  }
+  .termo:hover { background: var(--fundo); }
+  .termo:focus-visible { outline: 2px solid var(--destaque); outline-offset: -2px; }
+  .termo[aria-current="true"] {
+    background: var(--destaque-claro);
+    color: var(--destaque);
+    font-weight: 700;
+    box-shadow: inset 3px 0 0 var(--destaque);
+  }
+  .aviso { padding: 1rem; color: var(--suave); }
+  .var { color: var(--suave); font-weight: 400; }
+
+  /* Player */
+  .palco { position: sticky; top: 1rem; }
+  .palco h2 {
+    font-family: "Literata", Georgia, serif;
+    font-weight: 500;
+    font-size: clamp(1.5rem, 3vw, 2.2rem);
+    margin: 0 0 1rem;
+  }
+  .video {
+    aspect-ratio: 16 / 9;
+    background: var(--papel);
+    border: 1px solid var(--linha);
+    border-radius: 10px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    color: var(--suave);
+  }
+  .video iframe, .video video { width: 100%; height: 100%; border: 0; background: #000; object-fit: contain; }
+  .palco a { color: var(--destaque); }
+  .externo { margin-top: .7rem; font-size: .95rem; }
+
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; }
+    .palco { position: static; order: -1; }
+    #termos { max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Acervo Libras</h1>
+  <p>Escolha um termo para assistir ao sinal em Libras.</p>
+</header>
+
+<main>
+  <section class="lista" aria-label="Termos">
+    <div class="busca">
+      <input id="busca" type="search" placeholder="Buscar termo…" aria-label="Buscar termo">
+    </div>
+    <div id="termos"><p class="aviso">Carregando termos…</p></div>
+  </section>
+
+  <section class="palco" aria-live="polite">
+    <h2 id="titulo">Nenhum termo selecionado</h2>
+    <div class="video" id="video">Selecione um termo na lista</div>
+    <p class="externo" id="externo"></p>
+  </section>
+</main>
+
+<script>
+  // ====== CONFIGURAÇÃO ======
+  const SHEET_ID   = "1_leSzVU98IAr2qVUXB2noyKoCE63CzmUYYBkKZRkaGU";
+  const SHEET_NAME = "ACERVO-LIBRAS"; // nome da aba
+  // Opção mais confiável: Arquivo > Compartilhar > Publicar na Web >
+  // escolha a aba ACERVO-LIBRAS e o formato CSV, e cole o link gerado aqui.
+  const CSV_PUBLICADO = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS9IAAIQr83nzOiU-Mh8WtbFoD1coNpB83DstZAy7hh-JZdlwsGAoHwdcewvMhFVhUxVwHQ4mM6vwAn/pub?gid=1912874557&single=true&output=csv";
+  // ==========================
+
+  const URL_CSV = CSV_PUBLICADO ||
+    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`;
+
+  const elLista = document.getElementById("termos");
+  const elBusca = document.getElementById("busca");
+  let itens = [];
+
+  // Lê CSV respeitando aspas e vírgulas dentro do texto
+  function lerCSV(texto) {
+    const linhas = [];
+    let linha = [], campo = "", aspas = false;
+    for (let i = 0; i < texto.length; i++) {
+      const c = texto[i];
+      if (aspas) {
+        if (c === '"' && texto[i + 1] === '"') { campo += '"'; i++; }
+        else if (c === '"') aspas = false;
+        else campo += c;
+      } else if (c === '"') aspas = true;
+      else if (c === ",") { linha.push(campo); campo = ""; }
+      else if (c === "\n") { linha.push(campo); linhas.push(linha); linha = []; campo = ""; }
+      else if (c !== "\r") campo += c;
+    }
+    if (campo || linha.length) { linha.push(campo); linhas.push(linha); }
+    return linhas;
+  }
+
+  // Aceita youtube.com/watch?v=, youtu.be/, /shorts/ e /embed/
+  function idYoutube(url) {
+    const m = url.match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/);
+    return m ? m[1] : null;
+  }
+
+  const normalizar = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const slug = s => normalizar(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+  function desenharLista(filtro = "") {
+    const f = normalizar(filtro.trim());
+    const visiveis = itens.filter(i => normalizar(i.termo).includes(f));
+    if (!visiveis.length) {
+      elLista.innerHTML = `<p class="aviso">Nenhum termo encontrado para “${filtro}”.</p>`;
+      return;
+    }
+    let html = "", letraAtual = "";
+    for (const item of visiveis) {
+      const letra = (normalizar(item.termo)[0] || "#").toUpperCase();
+      if (letra !== letraAtual) { html += `<div class="letra">${letra}</div>`; letraAtual = letra; }
+      const atual = location.hash.slice(1) === item.slug;
+      const extra = item.variacao > 1 ? ` <span class="var">(${item.variacao})</span>` : "";
+      html += `<button class="termo" data-slug="${item.slug}" aria-current="${atual}">${item.termo}${extra}</button>`;
+    }
+    elLista.innerHTML = html;
+  }
+
+  function mostrar(slugTermo) {
+    const item = itens.find(i => i.slug === slugTermo);
+    if (!item) return;
+    document.getElementById("titulo").textContent = item.termo + (item.variacao > 1 ? ` (${item.variacao})` : "");
+    const id = idYoutube(item.link);
+    const ehArquivo = /\.(mp4|webm|mov)(\?|$)/i.test(item.link);
+    const elVideo = document.getElementById("video");
+    if (id) {
+      elVideo.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}?rel=0" title="${item.termo}" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+    } else if (ehArquivo) {
+      elVideo.innerHTML = `<video src="${item.link}" controls autoplay loop muted playsinline></video>`;
+    } else {
+      elVideo.textContent = "Este link não pode ser exibido aqui. Use o link abaixo para abrir o vídeo.";
+    }
+    document.getElementById("externo").innerHTML =
+      `<a href="${item.link}" target="_blank" rel="noopener">${id ? "Abrir no YouTube" : "Abrir vídeo original"}</a>`;
+    document.querySelectorAll(".termo").forEach(b =>
+      b.setAttribute("aria-current", b.dataset.slug === slugTermo));
+  }
+
+  elLista.addEventListener("click", e => {
+    const b = e.target.closest(".termo");
+    if (b) location.hash = b.dataset.slug;
+  });
+  elBusca.addEventListener("input", () => desenharLista(elBusca.value));
+  window.addEventListener("hashchange", () => mostrar(location.hash.slice(1)));
+
+  fetch(URL_CSV)
+    .then(r => { if (!r.ok) throw new Error("A planilha respondeu com erro " + r.status); return r.text(); })
+    .then(texto => {
+      if (texto.trim().startsWith("<")) throw new Error("O Google devolveu uma página em vez do CSV (planilha não pública ou link errado)");
+      itens = lerCSV(texto)
+        .slice(1) // pula o cabeçalho (TERMO, LINK)
+        .map(l => ({ termo: (l[0] || "").trim(), link: (l[1] || "").trim() }))
+        .filter(i => i.termo && i.link.startsWith("http"))
+        .sort((a, b) => a.termo.localeCompare(b.termo, "pt-BR"));
+      // Termos repetidos ganham número: Gramática (2), Gramática (3)...
+      const contagem = {};
+      for (const item of itens) {
+        const base = slug(item.termo);
+        contagem[base] = (contagem[base] || 0) + 1;
+        item.variacao = contagem[base];
+        item.slug = item.variacao > 1 ? `${base}-${item.variacao}` : base;
+      }
+      desenharLista();
+      if (location.hash) mostrar(location.hash.slice(1));
+    })
+    .catch(err => {
+      console.error(err);
+      elLista.innerHTML = `<p class="aviso">Não foi possível ler a planilha.<br><small>Detalhe: ${err.message}</small></p>`;
+    });
+</script>
+</body>
+</html>
